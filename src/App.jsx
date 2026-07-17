@@ -6,6 +6,9 @@ import { DocumentViewer } from './pages/DocumentViewer';
 import { Login } from './pages/Login';
 import { DocumentsLibrary } from './pages/DocumentsLibrary';
 import { Settings } from './pages/Settings';
+import { Features } from './pages/Features';
+import { Team } from './pages/Team';
+import { Compare } from './pages/Compare';
 
 function Layout() {
   const location = useLocation();
@@ -20,6 +23,9 @@ function Layout() {
         <Route path="/documents" element={<DocumentsLibrary />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/document/:id" element={<DocumentViewer />} />
+        <Route path="/features" element={<Features />} />
+        <Route path="/team" element={<Team />} />
+        <Route path="/compare" element={<Compare />} />
       </Routes>
     </div>
   );

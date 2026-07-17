@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, GitBranch, LayoutDashboard, Settings as SettingsIcon } from 'lucide-react';
+import { FileText, GitBranch, LayoutDashboard, Settings as SettingsIcon, Zap, Users } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -32,9 +32,11 @@ export const Navbar = () => {
               <span className="font-bold text-2xl tracking-tight text-white drop-shadow-sm">Revel</span>
             </Link>
 
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden lg:flex items-center gap-1">
               <NavItem to="/" icon={LayoutDashboard}>Dashboard</NavItem>
               <NavItem to="/documents" icon={FileText}>Library</NavItem>
+              <NavItem to="/features" icon={Zap}>Features</NavItem>
+              <NavItem to="/team" icon={Users}>Team</NavItem>
               <NavItem to="/settings" icon={SettingsIcon}>Settings</NavItem>
             </div>
           </div>
