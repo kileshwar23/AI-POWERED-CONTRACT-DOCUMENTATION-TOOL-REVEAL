@@ -1,19 +1,35 @@
 import React from 'react';
-import { FileText, GitBranch, LayoutDashboard, Settings as SettingsIcon, Zap, Users } from 'lucide-react';
+import { FileText, GitBranch, LayoutDashboard, Settings as SettingsIcon, Zap, Users, BookOpen, Activity } from 'lucide-react';
 import { Button } from './ui/Button';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { authService } from '../services/authService';
+import { useAuth } from '../context/AuthContext';
+import { LogOut } from 'lucide-react';
 
 export const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    try { await authService.logout(); } catch { /* ignore */ }
+    logout();
+    navigate('/login');
+  };
+
+  // Generate initials from user name
+  const initials = user?.name
+    ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'U';
   
   const NavItem = ({ to, icon: Icon, children }) => {
     const isActive = location.pathname === to;
     return (
       <Link 
         to={to} 
-        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isActive ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="h-4 w-4 shrink-0" />
         {children}
       </Link>
     );
@@ -34,28 +50,41 @@ export const Navbar = () => {
 
             <div className="hidden lg:flex items-center gap-1">
               <NavItem to="/" icon={LayoutDashboard}>Dashboard</NavItem>
-              <NavItem to="/documents" icon={FileText}>Library</NavItem>
-              <NavItem to="/features" icon={Zap}>Features</NavItem>
+              <NavItem to="/documents" icon={FileText}>Contracts</NavItem>
+              <NavItem to="/library" icon={BookOpen}>Clause Library</NavItem>
+              <NavItem to="/audit" icon={Activity}>Audit Log</NavItem>
               <NavItem to="/team" icon={Users}>Team</NavItem>
               <NavItem to="/settings" icon={SettingsIcon}>Settings</NavItem>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
-            <Button variant="ghost" className="hidden md:flex gap-2">
+            <a 
+              href="https://github.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hidden md:flex gap-2 items-center px-4 py-2 text-sm font-medium rounded-lg text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
+            >
               <GitBranch className="h-5 w-5" />
               <span>Star on GitHub</span>
-            </Button>
-            <Button variant="primary" className="h-10 px-5 hidden sm:flex">
+            </a>
+            <Button 
+              variant="primary" 
+              className="h-10 px-5 hidden sm:flex"
+              onClick={() => navigate('/documents')}
+            >
               New Analysis
             </Button>
-            <Link to="/login">
-              <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-[#8b5cf6] to-[#3b82f6] p-[2px] cursor-pointer hover:scale-105 transition-transform shadow-[0_0_10px_rgba(139,92,246,0.2)] ml-2">
+            <div className="flex items-center gap-2 ml-2">
+              <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-[#8b5cf6] to-[#3b82f6] p-[2px] cursor-pointer hover:scale-105 transition-transform shadow-[0_0_10px_rgba(139,92,246,0.2)]">
                 <div className="h-full w-full rounded-full bg-[#18181b] flex items-center justify-center">
-                  <span className="text-xs font-bold">JD</span>
+                  <span className="text-xs font-bold">{initials}</span>
                 </div>
               </div>
-            </Link>
+              <Button variant="ghost" className="h-10 px-3 text-red-400 hover:text-red-300 hover:bg-red-400/10" onClick={handleLogout}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>

@@ -23,5 +23,23 @@ export const notificationService = {
   notifyAnalysisComplete: async (documentId) => {
     const response = await apiClient.post(`/notifications/analysis-complete/${documentId}`);
     return response.data;
+  },
+
+  // 5. Get Notifications
+  getNotifications: async () => {
+    const response = await apiClient.get('/notifications');
+    return response.data;
+  },
+
+  // 6. Mark As Read
+  markAsRead: async (notificationId) => {
+    const response = await apiClient.put(`/notifications/${notificationId}/read`);
+    return response.data;
+  },
+
+  // 7. Mark All As Read
+  markAllAsRead: async () => {
+    const response = await apiClient.put('/notifications/mark-all-read');
+    return response.data;
   }
 };

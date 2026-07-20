@@ -1,16 +1,92 @@
-import React from 'react';
-import { Search, Filter, FileText, AlertTriangle, CheckCircle, Clock, MoreVertical, Download, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, Filter, FileText, AlertTriangle, CheckCircle, Clock, MoreVertical, Download, Trash2, UploadCloud, Loader2, Archive, Zap } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { documentService } from '../services/documentService';
+import { aiService } from '../services/aiService';
+import { useAuth } from '../context/AuthContext';
 
 export const DocumentsLibrary = () => {
-  const documents = [
-    { id: 1, name: 'Service Level Agreement - Acme Corp.pdf', date: 'Oct 24, 2026', type: 'SLA', status: 'High Risk', icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-400/10 border-red-400/30' },
-    { id: 2, name: 'Non-Disclosure Agreement_v2.docx', date: 'Oct 23, 2026', type: 'NDA', status: 'Clean', icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-400/10 border-emerald-400/30' },
-    { id: 3, name: 'Vendor Contract 2026.pdf', date: 'Oct 22, 2026', type: 'Contract', status: 'Pending Review', icon: Clock, color: 'text-amber-400', bg: 'bg-amber-400/10 border-amber-400/30' },
-    { id: 4, name: 'Employment Agreement - Sarah Connor.pdf', date: 'Oct 20, 2026', type: 'Employment', status: 'Clean', icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-400/10 border-emerald-400/30' },
-    { id: 5, name: 'Lease Agreement 101 Main St.pdf', date: 'Oct 18, 2026', type: 'Lease', status: 'Medium Risk', icon: AlertTriangle, color: 'text-orange-400', bg: 'bg-orange-400/10 border-orange-400/30' },
-  ];
+  const { user } = useAuth();
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    fetchDocuments();
+  }, []);
+
+  const fetchDocuments = async () => {
+    try {
+      const adminRoles = ['ADMIN', 'OWNER', 'ORG_ADMIN', 'SYSTEM_ADMIN'];
+      if (user?.role && adminRoles.includes(user.role)) {
+        const data = await documentService.getAllAdminDocuments();
+        setDocuments(data?.documents || []);
+      } else {
+        const data = await documentService.getAllDocuments();
+        setDocuments(data || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch documents", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      await documentService.uploadDocument(file);
+      await fetchDocuments(); // refresh list
+    } catch (error) {
+      console.error("Failed to upload document", error);
+      alert("Failed to upload. Make sure you are logged in.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDelete = async (id, e) => {
+    e.stopPropagation();
+    if(window.confirm('Are you sure you want to delete this document?')) {
+      try {
+        await documentService.deleteDocument(id);
+        setDocuments(docs => docs.filter(d => d._id !== id));
+      } catch (error) {
+        console.error("Failed to delete document", error);
+      }
+    }
+  };
+
+  const handleAnalyze = async (id, e) => {
+    e.stopPropagation();
+    try {
+      await aiService.analyzeContract(id);
+      await fetchDocuments();
+    } catch (error) {
+      console.error("Failed to analyze", error);
+    }
+  };
+
+  const getStatusUI = (status) => {
+    switch (status) {
+      case 'ANALYZED':
+        return { icon: CheckCircle, label: 'Analyzed', color: 'text-emerald-400', bg: 'bg-emerald-400/10 border-emerald-400/30' };
+      case 'ARCHIVED':
+        return { icon: Archive, label: 'Archived', color: 'text-gray-400', bg: 'bg-gray-400/10 border-gray-400/30' };
+      default:
+        return { icon: Clock, label: 'Pending', color: 'text-amber-400', bg: 'bg-amber-400/10 border-amber-400/30' };
+    }
+  };
 
   return (
     <div className="pt-28 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full animate-fade-in">
@@ -19,7 +95,18 @@ export const DocumentsLibrary = () => {
           <h1 className="text-3xl font-bold text-white mb-2">Document Library</h1>
           <p className="text-[#a1a1aa]">Manage and search through all your analyzed contracts.</p>
         </div>
-        <Button variant="primary" className="whitespace-nowrap">Upload New</Button>
+        
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          className="hidden" 
+          onChange={handleFileChange}
+          accept=".pdf,.doc,.docx"
+        />
+        <Button variant="primary" className="whitespace-nowrap gap-2" onClick={handleUploadClick} disabled={uploading}>
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+          {uploading ? 'Uploading...' : 'Upload New'}
+        </Button>
       </div>
 
       <Card className="p-0 overflow-hidden border border-[rgba(255,255,255,0.08)] bg-[#18181b]/50">
@@ -38,47 +125,73 @@ export const DocumentsLibrary = () => {
           </Button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-[#27272a]/20 border-b border-[rgba(255,255,255,0.05)] text-[#a1a1aa]">
-              <tr>
-                <th className="px-6 py-4 font-medium">Document Name</th>
-                <th className="px-6 py-4 font-medium">Date Uploaded</th>
-                <th className="px-6 py-4 font-medium">Type</th>
-                <th className="px-6 py-4 font-medium">Status</th>
-                <th className="px-6 py-4 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[rgba(255,255,255,0.05)]">
-              {documents.map((doc) => (
-                <tr key={doc.id} className="hover:bg-white/[0.02] transition-colors group cursor-pointer">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-[#27272a] rounded-lg group-hover:bg-[#8b5cf6]/20 transition-colors border border-[rgba(255,255,255,0.05)] group-hover:border-[#8b5cf6]/30">
-                        <FileText className="h-5 w-5 text-[#a1a1aa] group-hover:text-[#8b5cf6]" />
-                      </div>
-                      <span className="font-medium text-white group-hover:text-[#8b5cf6] transition-colors">{doc.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-400">{doc.date}</td>
-                  <td className="px-6 py-4 text-gray-400">{doc.type}</td>
-                  <td className="px-6 py-4">
-                    <div className={`inline-flex px-2.5 py-1 rounded-full items-center gap-1.5 text-xs font-medium border ${doc.color} ${doc.bg}`}>
-                      <doc.icon className="h-3 w-3" />
-                      {doc.status}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" className="h-8 w-8 p-0"><Download className="h-4 w-4" /></Button>
-                      <Button variant="ghost" className="h-8 w-8 p-0 hover:text-red-400"><Trash2 className="h-4 w-4" /></Button>
-                      <Button variant="ghost" className="h-8 w-8 p-0"><MoreVertical className="h-4 w-4" /></Button>
-                    </div>
-                  </td>
+        <div className="overflow-x-auto min-h-[300px]">
+          {loading ? (
+            <div className="flex items-center justify-center h-64 text-gray-400 gap-3">
+              <Loader2 className="h-6 w-6 animate-spin text-[#8b5cf6]" />
+              <span>Loading documents...</span>
+            </div>
+          ) : documents.length === 0 ? (
+             <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+               <FileText className="h-12 w-12 text-[rgba(255,255,255,0.1)] mb-4" />
+               <p>No documents found.</p>
+               <Button variant="ghost" className="mt-4 text-[#8b5cf6]" onClick={handleUploadClick}>Upload your first document</Button>
+             </div>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead className="bg-[#27272a]/20 border-b border-[rgba(255,255,255,0.05)] text-[#a1a1aa]">
+                <tr>
+                  <th className="px-6 py-4 font-medium">Document Name</th>
+                  <th className="px-6 py-4 font-medium">Date Uploaded</th>
+                  <th className="px-6 py-4 font-medium">Status</th>
+                  <th className="px-6 py-4 font-medium">Risk Score</th>
+                  <th className="px-6 py-4 font-medium text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-[rgba(255,255,255,0.05)]">
+                {documents.map((doc) => {
+                  const statusUI = getStatusUI(doc.status);
+                  return (
+                    <tr key={doc._id} className="hover:bg-white/[0.02] transition-colors group cursor-pointer">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-[#27272a] rounded-lg group-hover:bg-[#8b5cf6]/20 transition-colors border border-[rgba(255,255,255,0.05)] group-hover:border-[#8b5cf6]/30">
+                            <FileText className="h-5 w-5 text-[#a1a1aa] group-hover:text-[#8b5cf6]" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="font-medium text-white group-hover:text-[#8b5cf6] transition-colors">{doc.name}</span>
+                            {['ADMIN', 'OWNER', 'ORG_ADMIN', 'SYSTEM_ADMIN'].includes(user?.role) && doc.uploaderId && (
+                              <span className="text-xs text-gray-500 mt-0.5">by {doc.uploaderId.name || 'Unknown'}</span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-400">{new Date(doc.createdAt).toLocaleDateString()}</td>
+                      <td className="px-6 py-4">
+                        <div className={`inline-flex px-2.5 py-1 rounded-full items-center gap-1.5 text-xs font-medium border ${statusUI.color} ${statusUI.bg}`}>
+                          <statusUI.icon className="h-3 w-3" />
+                          {statusUI.label}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-400">{doc.riskScore || 0}/100</td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {doc.status === 'PENDING' && (
+                            <Button variant="ghost" className="h-8 w-8 p-0 text-amber-400 hover:text-amber-300 hover:bg-amber-400/10" onClick={(e) => handleAnalyze(doc._id, e)} title="Run AI Analysis">
+                              <Zap className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" className="h-8 w-8 p-0"><Download className="h-4 w-4" /></Button>
+                          <Button variant="ghost" className="h-8 w-8 p-0 hover:text-red-400" onClick={(e) => handleDelete(doc._id, e)}><Trash2 className="h-4 w-4" /></Button>
+                          <Button variant="ghost" className="h-8 w-8 p-0"><MoreVertical className="h-4 w-4" /></Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </Card>
     </div>

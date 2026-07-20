@@ -1,21 +1,48 @@
 import React, { useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { FileText, GitBranch, Mail, Lock, User } from 'lucide-react';
+import { FileText, GitBranch, Mail, Lock, User, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { authService } from '../services/authService';
+import { useAuth } from '../context/AuthContext';
 
 export const Login = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
+  
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate('/');
+    setLoading(true);
+    setError(null);
+    
+    try {
+      let userData;
+      if (isLogin) {
+        userData = await authService.login({ email, password });
+      } else {
+        await authService.register({ name, email, password });
+        userData = await authService.login({ email, password });
+      }
+      login(userData); // save to auth context
+      navigate('/');
+    } catch (err) {
+      console.error('Login/Register error:', err);
+      const errorMsg = err.response?.data?.message || err.message || 'Something went wrong. Please try again.';
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[#09090b] relative overflow-hidden w-full">
-      {/* Background gradients */}
       <div className="absolute top-1/4 -left-20 w-96 h-96 bg-[#8b5cf6]/20 rounded-full blur-[100px] pointer-events-none"></div>
       <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-[#3b82f6]/20 rounded-full blur-[100px] pointer-events-none"></div>
 
@@ -33,8 +60,15 @@ export const Login = () => {
         </div>
 
         <Card className="bg-[#18181b]/80 border-[rgba(255,255,255,0.05)] backdrop-blur-xl shadow-2xl p-8 transition-all duration-300">
+          
+          {error && (
+            <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-200">{error}</p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
-            
             {!isLogin && (
               <div className="space-y-2 text-left animate-fade-in">
                 <label className="text-sm font-medium text-gray-300">Full Name</label>
@@ -43,6 +77,8 @@ export const Login = () => {
                   <input 
                     type="text" 
                     placeholder="John Doe" 
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
                     className="w-full bg-[#27272a]/50 border border-[rgba(255,255,255,0.1)] rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6] transition-all"
                     required={!isLogin}
                   />
@@ -57,6 +93,8 @@ export const Login = () => {
                 <input 
                   type="email" 
                   placeholder="you@example.com" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-[#27272a]/50 border border-[rgba(255,255,255,0.1)] rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6] transition-all"
                   required
                 />
@@ -75,14 +113,16 @@ export const Login = () => {
                 <input 
                   type="password" 
                   placeholder="••••••••" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-[#27272a]/50 border border-[rgba(255,255,255,0.1)] rounded-xl py-3 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6] transition-all"
                   required
                 />
               </div>
             </div>
 
-            <Button variant="primary" className="w-full h-11 text-base transition-all">
-              {isLogin ? 'Sign In' : 'Create Account'}
+            <Button variant="primary" className="w-full h-11 text-base transition-all" disabled={loading}>
+              {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
             </Button>
           </form>
 
@@ -101,7 +141,10 @@ export const Login = () => {
         <p className="text-center text-sm text-gray-500 mt-6">
           {isLogin ? "Don't have an account? " : "Already have an account? "}
           <button 
-            onClick={() => setIsLogin(!isLogin)}
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError(null);
+            }}
             className="text-white hover:text-[#8b5cf6] transition-colors font-medium bg-transparent border-none p-0 cursor-pointer"
           >
             {isLogin ? 'Sign Up' : 'Sign In'}

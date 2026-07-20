@@ -65,5 +65,33 @@ export const documentService = {
   getDocumentStatistics: async () => {
     const response = await apiClient.get('/documents/statistics');
     return response.data;
+  },
+
+  // 11. Upload New Version
+  uploadNewVersion: async (documentId, fileData) => {
+    const formData = new FormData();
+    formData.append('file', fileData);
+    const response = await apiClient.post(`/documents/${documentId}/versions`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  // 12. Get Document Versions
+  getDocumentVersions: async (documentId) => {
+    const response = await apiClient.get(`/documents/${documentId}/versions`);
+    return response.data;
+  },
+
+  // 13. Compare Documents
+  compareDocuments: async (id1, id2) => {
+    const response = await apiClient.get(`/documents/compare/${id1}/${id2}`);
+    return response.data;
+  },
+
+  // 14. Get All Admin Documents
+  getAllAdminDocuments: async () => {
+    const response = await apiClient.get('/admin/documents');
+    return response.data;
   }
 };

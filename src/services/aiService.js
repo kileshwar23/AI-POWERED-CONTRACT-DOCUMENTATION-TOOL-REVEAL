@@ -71,5 +71,11 @@ export const aiService = {
   compareContracts: async (docId1, docId2) => {
     const response = await apiClient.post(`/ai/compare`, { docId1, docId2 });
     return response.data;
+  },
+
+  // 13. Suggest Redline
+  suggestRedline: async (documentId, clauseText) => {
+    const response = await apiClient.post(`/ai/suggest-redline/${documentId}`, { clauseText });
+    return response.data;
   }
 };

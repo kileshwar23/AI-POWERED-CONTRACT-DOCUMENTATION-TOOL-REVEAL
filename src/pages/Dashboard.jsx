@@ -1,9 +1,53 @@
-import React from 'react';
-import { UploadCloud, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import React, { useRef, useState, useEffect } from 'react';
+import { UploadCloud, FileText, AlertTriangle, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { documentService } from '../services/documentService';
+import { useNavigate } from 'react-router-dom';
 
 export const Dashboard = () => {
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [stats, setStats] = useState({ analyzed: 0, risksIdentified: 0, timeSaved: 0 });
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const data = await documentService.getDocumentStatistics();
+        setStats({
+          analyzed: data.analyzed || 0,
+          risksIdentified: data.risksIdentified || 0,
+          timeSaved: data.timeSaved || 0
+        });
+      } catch (error) {
+        console.error("Failed to fetch stats", error);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      await documentService.uploadDocument(file);
+      navigate('/documents');
+    } catch (error) {
+      console.error("Failed to upload document", error);
+      alert("Failed to upload. Make sure you are logged in.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   return (
     <div className="pt-28 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full animate-fade-in">
       
@@ -19,13 +63,23 @@ export const Dashboard = () => {
       <div className="grid lg:grid-cols-3 gap-8">
         
         <div className="lg:col-span-2 space-y-8">
-          <Card className="border-dashed border-2 border-[#8b5cf6]/40 bg-[#8b5cf6]/5 hover:bg-[#8b5cf6]/10 transition-all duration-300 cursor-pointer group flex flex-col items-center justify-center p-12 text-center h-[300px]">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            onChange={handleFileChange}
+            accept=".pdf,.doc,.docx"
+          />
+          <Card 
+            className="border-dashed border-2 border-[#8b5cf6]/40 bg-[#8b5cf6]/5 hover:bg-[#8b5cf6]/10 transition-all duration-300 cursor-pointer group flex flex-col items-center justify-center p-12 text-center h-[300px]"
+            onClick={!uploading ? handleUploadClick : undefined}
+          >
             <div className="w-20 h-20 rounded-full bg-[#8b5cf6]/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-[0_0_20px_rgba(139,92,246,0.3)]">
-              <UploadCloud className="h-10 w-10 text-[#8b5cf6]" />
+              {uploading ? <Loader2 className="h-10 w-10 text-[#8b5cf6] animate-spin" /> : <UploadCloud className="h-10 w-10 text-[#8b5cf6]" />}
             </div>
-            <h3 className="text-2xl font-semibold mb-2 text-white">Upload a Document</h3>
+            <h3 className="text-2xl font-semibold mb-2 text-white">{uploading ? 'Uploading...' : 'Upload a Document'}</h3>
             <p className="text-[#a1a1aa] mb-6">Drag and drop your PDF or Word file here, or click to browse.</p>
-            <Button variant="primary">Select File</Button>
+            <Button variant="primary" disabled={uploading}>Select File</Button>
           </Card>
           
           <div>
@@ -65,15 +119,15 @@ export const Dashboard = () => {
             <div className="space-y-6">
               <div>
                 <p className="text-[#a1a1aa] mb-1">Documents Analyzed</p>
-                <p className="text-4xl font-bold text-white">124</p>
+                <p className="text-4xl font-bold text-white">{stats.analyzed}</p>
               </div>
               <div>
                 <p className="text-[#a1a1aa] mb-1">Risks Identified</p>
-                <p className="text-4xl font-bold text-red-400 drop-shadow-[0_0_10px_rgba(248,113,113,0.3)]">38</p>
+                <p className="text-4xl font-bold text-red-400 drop-shadow-[0_0_10px_rgba(248,113,113,0.3)]">{stats.risksIdentified}</p>
               </div>
               <div>
                 <p className="text-[#a1a1aa] mb-1">Time Saved</p>
-                <p className="text-4xl font-bold text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">42 hrs</p>
+                <p className="text-4xl font-bold text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">{stats.timeSaved} hrs</p>
               </div>
             </div>
           </Card>

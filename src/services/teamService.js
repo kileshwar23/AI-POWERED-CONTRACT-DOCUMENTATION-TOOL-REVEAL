@@ -30,5 +30,17 @@ export const teamService = {
     const params = documentId ? { documentId } : {};
     const response = await apiClient.get('/team/activity-logs', { params });
     return response.data;
+  },
+
+  // 6. Get My Team
+  getMyTeam: async () => {
+    const response = await apiClient.get('/team/my-team');
+    return response.data;
+  },
+
+  // 7. Update Organization Settings
+  updateOrganizationSettings: async (settings) => {
+    const response = await apiClient.put('/team/organization/settings', { settings });
+    return response.data;
   }
 };
