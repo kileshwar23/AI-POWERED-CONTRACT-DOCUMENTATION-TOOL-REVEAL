@@ -5,7 +5,7 @@ const documentSchema = new mongoose.Schema({
   fileUrl: { type: String, required: true },
   uploaderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   riskScore: { type: Number, default: 0 },
-  status: { type: String, enum: ['PENDING', 'ANALYZED', 'ARCHIVED'], default: 'PENDING' },
+  status: { type: String, enum: ['PENDING', 'ANALYZED', 'ARCHIVED', 'APPROVED', 'REJECTED'], default: 'PENDING' },
   workflowStatus: { type: String, enum: ['DRAFT', 'PENDING_REVIEW', 'APPROVED', 'REJECTED', 'OUT_FOR_SIGNATURE', 'EXECUTED'], default: 'DRAFT' },
   versionNumber: { type: Number, default: 1 },
   parentDocumentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Document', default: null },
@@ -15,7 +15,7 @@ const documentSchema = new mongoose.Schema({
   extractedClauses: [{
     title: String,
     content: String,
-    type: String, // e.g., 'RISK', 'INFO'
+    type: { type: String }, // Wrapped to avoid conflicting with Mongoose type configuration
     riskScore: { type: Number, default: 0 },
     suggestedRedline: { type: String, default: '' },
   }],

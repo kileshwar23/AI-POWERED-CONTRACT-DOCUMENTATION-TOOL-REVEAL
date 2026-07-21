@@ -48,15 +48,20 @@ const register = async (req, res) => {
 
 // 2. POST /login
 const login = async (req, res) => {
+  console.log('Login attempt started:', req.body.email);
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
+      console.log('Missing email or password');
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
+    console.log('Finding user in DB...');
     const user = await User.findOne({ email: email.toLowerCase() });
+    console.log('User found:', !!user);
     if (user && (await bcrypt.compare(password, user.password))) {
+      console.log('Password matched, sending response...');
       res.json({
         _id: user._id,
         name: user.name,
@@ -66,9 +71,11 @@ const login = async (req, res) => {
         refreshToken: generateRefreshToken(user._id),
       });
     } else {
+      console.log('Invalid credentials');
       res.status(401).json({ message: 'Invalid email or password' });
     }
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -124,6 +131,9 @@ const updateProfile = async (req, res) => {
       user.email = req.body.email.toLowerCase();
     }
     if (req.body.profilePicture !== undefined) user.profilePicture = req.body.profilePicture;
+    if (req.body.phone !== undefined) user.phone = req.body.phone;
+    if (req.body.bio !== undefined) user.bio = req.body.bio;
+    if (req.body.role !== undefined) user.role = req.body.role;
 
     const updatedUser = await user.save();
     res.json({
@@ -132,6 +142,8 @@ const updateProfile = async (req, res) => {
       email: updatedUser.email,
       role: updatedUser.role,
       profilePicture: updatedUser.profilePicture,
+      phone: updatedUser.phone,
+      bio: updatedUser.bio,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

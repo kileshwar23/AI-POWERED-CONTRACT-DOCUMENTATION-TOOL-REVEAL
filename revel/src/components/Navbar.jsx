@@ -77,8 +77,12 @@ export const Navbar = () => {
             </Button>
             <div className="flex items-center gap-2 ml-2">
               <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-[#8b5cf6] to-[#3b82f6] p-[2px] cursor-pointer hover:scale-105 transition-transform shadow-[0_0_10px_rgba(139,92,246,0.2)]">
-                <div className="h-full w-full rounded-full bg-[#18181b] flex items-center justify-center">
-                  <span className="text-xs font-bold">{initials}</span>
+                <div className="h-full w-full rounded-full bg-[#18181b] flex items-center justify-center overflow-hidden">
+                  {user?.profilePicture ? (
+                    <img src={user.profilePicture} alt="Avatar" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-xs font-bold text-white">{initials}</span>
+                  )}
                 </div>
               </div>
               <Button variant="ghost" className="h-10 px-3 text-red-400 hover:text-red-300 hover:bg-red-400/10" onClick={handleLogout}>

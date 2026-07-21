@@ -1,12 +1,68 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { User, CreditCard, Bell, Shield, Zap } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
+import { authService } from '../services/authService';
+
+import { useLocation } from 'react-router-dom';
 
 export const Settings = () => {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('profile');
+  const { user, updateUser } = useAuth();
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'profile');
+  const fileInputRef = useRef(null);
+
+  // Profile state
+  const [profileData, setProfileData] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    role: user?.role || '',
+    phone: user?.phone || '',
+    bio: user?.bio || '',
+    profilePicture: user?.profilePicture || ''
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const handleProfileChange = (e) => {
+    setProfileData({ ...profileData, [e.target.name]: e.target.value });
+  };
+
+  const handleAvatarSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) { // 2MB limit
+        setMessage('Image must be less than 2MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileData({ ...profileData, profilePicture: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      setIsSaving(true);
+      setMessage('');
+      const response = await authService.updateProfile(profileData);
+      if (response.user) {
+        updateUser(response.user);
+      } else {
+        updateUser(profileData);
+      }
+      setMessage('Profile updated successfully!');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setMessage('Failed to update profile.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="pt-28 pb-12 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full animate-fade-in">
@@ -55,31 +111,64 @@ export const Settings = () => {
               <div className="space-y-6">
                 <div className="flex items-center gap-6">
                   <div className="h-20 w-20 rounded-full bg-gradient-to-tr from-[#8b5cf6] to-[#3b82f6] p-0.5 shadow-lg">
-                    <div className="h-full w-full rounded-full bg-[#09090b] border-2 border-transparent flex items-center justify-center overflow-hidden relative group cursor-pointer">
-                      <span className="text-2xl font-bold text-white">
-                        {user?.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U'}
-                      </span>
+                    <div className="h-full w-full rounded-full bg-[#09090b] border-2 border-transparent flex items-center justify-center overflow-hidden relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                      {profileData.profilePicture ? (
+                        <img src={profileData.profilePicture} alt="Avatar" className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="text-2xl font-bold text-white">
+                          {profileData.name ? profileData.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U'}
+                        </span>
+                      )}
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <span className="text-xs text-white font-medium">Edit</span>
                       </div>
                     </div>
                   </div>
-                  <Button variant="secondary">Change Avatar</Button>
+                  <div>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      onChange={handleAvatarSelect} 
+                      accept="image/jpeg, image/png, image/webp" 
+                      className="hidden" 
+                    />
+                    <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>Change Avatar</Button>
+                  </div>
                 </div>
+
+                {message && (
+                  <div className={`p-3 rounded-lg text-sm ${message.includes('successfully') ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                    {message}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-300">Full Name</label>
-                    <input type="text" defaultValue={user?.name || ''} className="w-full bg-[#27272a]/50 border border-[rgba(255,255,255,0.1)] rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6] transition-all" />
+                    <input type="text" name="name" value={profileData.name} onChange={handleProfileChange} className="w-full bg-[#27272a]/50 border border-[rgba(255,255,255,0.1)] rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6] transition-all" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-300">Email Address</label>
-                    <input type="email" defaultValue={user?.email || ''} className="w-full bg-[#27272a]/50 border border-[rgba(255,255,255,0.1)] rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6] transition-all" />
+                    <input type="email" name="email" value={profileData.email} onChange={handleProfileChange} className="w-full bg-[#27272a]/50 border border-[rgba(255,255,255,0.1)] rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6] transition-all" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-300">Role / Job Title</label>
+                    <input type="text" name="role" value={profileData.role} onChange={handleProfileChange} placeholder="e.g. Legal Counsel" className="w-full bg-[#27272a]/50 border border-[rgba(255,255,255,0.1)] rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6] transition-all" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-300">Phone Number</label>
+                    <input type="tel" name="phone" value={profileData.phone} onChange={handleProfileChange} placeholder="+1 (555) 000-0000" className="w-full bg-[#27272a]/50 border border-[rgba(255,255,255,0.1)] rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6] transition-all" />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium text-gray-300">Bio</label>
+                    <textarea name="bio" value={profileData.bio} onChange={handleProfileChange} rows="3" placeholder="Tell us a little bit about yourself..." className="w-full bg-[#27272a]/50 border border-[rgba(255,255,255,0.1)] rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-[#8b5cf6] focus:ring-1 focus:ring-[#8b5cf6] transition-all resize-none"></textarea>
                   </div>
                 </div>
                 
                 <div className="pt-4 border-t border-[rgba(255,255,255,0.05)] flex justify-end">
-                  <Button variant="primary">Save Changes</Button>
+                  <Button variant="primary" onClick={handleSaveProfile} disabled={isSaving}>
+                    {isSaving ? 'Saving...' : 'Save Changes'}
+                  </Button>
                 </div>
               </div>
             </Card>

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const { uploadDocument, uploadNewVersion, getDocumentVersions, compareDocuments, getDocument, getAllDocuments, deleteDocument, renameDocument, downloadDocument, favoriteDocument, archiveDocument, restoreDocument, getDocumentStatistics } = require('../controllers/documentController');
+const { uploadDocument, uploadNewVersion, getDocumentVersions, compareDocuments, getDocument, getAllDocuments, deleteDocument, renameDocument, downloadDocument, favoriteDocument, archiveDocument, restoreDocument, getDocumentStatistics, approveDocument, rejectDocument } = require('../controllers/documentController');
 const { protect } = require('../middlewares/authMiddleware');
 
 const upload = multer({ dest: 'uploads/' });
@@ -19,5 +19,7 @@ router.get('/:id/download', protect, downloadDocument);
 router.post('/:id/favorite', protect, favoriteDocument);
 router.post('/:id/archive', protect, archiveDocument);
 router.post('/:id/restore', protect, restoreDocument);
+router.post('/:id/approve', protect, approveDocument);
+router.post('/:id/reject', protect, rejectDocument);
 
 module.exports = router;

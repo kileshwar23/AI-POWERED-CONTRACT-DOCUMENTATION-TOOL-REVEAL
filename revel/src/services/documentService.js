@@ -93,5 +93,17 @@ export const documentService = {
   getAllAdminDocuments: async () => {
     const response = await apiClient.get('/admin/documents');
     return response.data;
+  },
+
+  // 15. Approve Document
+  approveDocument: async (documentId) => {
+    const response = await apiClient.post(`/documents/${documentId}/approve`);
+    return response.data;
+  },
+
+  // 16. Reject Document
+  rejectDocument: async (documentId) => {
+    const response = await apiClient.post(`/documents/${documentId}/reject`);
+    return response.data;
   }
 };

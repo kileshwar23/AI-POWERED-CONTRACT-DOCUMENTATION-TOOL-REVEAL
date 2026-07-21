@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, FileText, AlertTriangle, CheckCircle, Clock, MoreVertical, Download, Trash2, UploadCloud, Loader2, Archive, Zap } from 'lucide-react';
+import { Search, Filter, FileText, AlertTriangle, CheckCircle, Clock, MoreVertical, Download, Trash2, UploadCloud, Loader2, Archive, Zap, XCircle, Check, X } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { documentService } from '../services/documentService';
@@ -11,6 +11,8 @@ export const DocumentsLibrary = () => {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [analyzingId, setAnalyzingId] = useState(null);
+  const [analyzeError, setAnalyzeError] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -55,6 +57,23 @@ export const DocumentsLibrary = () => {
     }
   };
 
+  const handleDownload = async (id, name, e) => {
+    e.stopPropagation();
+    try {
+      const blob = await documentService.downloadDocument(id);
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', name || 'document');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+    } catch (error) {
+      console.error("Failed to download document", error);
+      alert("Failed to download document.");
+    }
+  };
+
   const handleDelete = async (id, e) => {
     e.stopPropagation();
     if(window.confirm('Are you sure you want to delete this document?')) {
@@ -69,16 +88,46 @@ export const DocumentsLibrary = () => {
 
   const handleAnalyze = async (id, e) => {
     e.stopPropagation();
+    setAnalyzingId(id);
+    setAnalyzeError(null);
     try {
       await aiService.analyzeContract(id);
       await fetchDocuments();
     } catch (error) {
+      const msg = error.response?.data?.message || error.message || 'Analysis failed';
+      setAnalyzeError(msg);
       console.error("Failed to analyze", error);
+    } finally {
+      setAnalyzingId(null);
+    }
+  };
+
+  const handleApprove = async (id, e) => {
+    e.stopPropagation();
+    try {
+      await documentService.approveDocument(id);
+      await fetchDocuments();
+    } catch (error) {
+      console.error("Failed to approve", error);
+    }
+  };
+
+  const handleReject = async (id, e) => {
+    e.stopPropagation();
+    try {
+      await documentService.rejectDocument(id);
+      await fetchDocuments();
+    } catch (error) {
+      console.error("Failed to reject", error);
     }
   };
 
   const getStatusUI = (status) => {
     switch (status) {
+      case 'APPROVED':
+        return { icon: CheckCircle, label: 'Approved', color: 'text-green-500', bg: 'bg-green-500/10 border-green-500/30' };
+      case 'REJECTED':
+        return { icon: XCircle, label: 'Rejected', color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/30' };
       case 'ANALYZED':
         return { icon: CheckCircle, label: 'Analyzed', color: 'text-emerald-400', bg: 'bg-emerald-400/10 border-emerald-400/30' };
       case 'ARCHIVED':
@@ -108,6 +157,17 @@ export const DocumentsLibrary = () => {
           {uploading ? 'Uploading...' : 'Upload New'}
         </Button>
       </div>
+
+      {analyzeError && (
+        <div className="mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-red-300">Analysis Failed</p>
+            <p className="text-xs text-red-400 mt-0.5">{analyzeError}</p>
+          </div>
+          <button onClick={() => setAnalyzeError(null)} className="ml-auto text-red-400 hover:text-red-200"><X className="h-4 w-4" /></button>
+        </div>
+      )}
 
       <Card className="p-0 overflow-hidden border border-[rgba(255,255,255,0.08)] bg-[#18181b]/50">
         <div className="p-4 border-b border-[rgba(255,255,255,0.08)] flex flex-col md:flex-row gap-4 bg-[#27272a]/30">
@@ -175,15 +235,31 @@ export const DocumentsLibrary = () => {
                       </td>
                       <td className="px-6 py-4 text-gray-400">{doc.riskScore || 0}/100</td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-end gap-2">
                           {doc.status === 'PENDING' && (
-                            <Button variant="ghost" className="h-8 w-8 p-0 text-amber-400 hover:text-amber-300 hover:bg-amber-400/10" onClick={(e) => handleAnalyze(doc._id, e)} title="Run AI Analysis">
-                              <Zap className="h-4 w-4" />
+                            <Button variant="primary" className="h-8 px-3 text-xs gap-1.5" onClick={(e) => handleAnalyze(doc._id, e)} disabled={analyzingId === doc._id}>
+                              {analyzingId === doc._id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                              {analyzingId === doc._id ? 'Analyzing...' : 'Analyze'}
                             </Button>
                           )}
-                          <Button variant="ghost" className="h-8 w-8 p-0"><Download className="h-4 w-4" /></Button>
-                          <Button variant="ghost" className="h-8 w-8 p-0 hover:text-red-400" onClick={(e) => handleDelete(doc._id, e)}><Trash2 className="h-4 w-4" /></Button>
-                          <Button variant="ghost" className="h-8 w-8 p-0"><MoreVertical className="h-4 w-4" /></Button>
+                          {doc.status === 'ANALYZED' && ['ADMIN', 'OWNER', 'ORG_ADMIN', 'SYSTEM_ADMIN'].includes(user?.role) && (
+                            <>
+                              <Button variant="ghost" className="h-8 px-2 text-green-500 hover:text-green-400 hover:bg-green-500/10" onClick={(e) => handleApprove(doc._id, e)} title="Approve">
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" className="h-8 px-2 text-red-500 hover:text-red-400 hover:bg-red-500/10" onClick={(e) => handleReject(doc._id, e)} title="Reject">
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                          <Button variant="secondary" className="h-8 px-3 text-gray-300 hover:text-white flex items-center gap-1.5" onClick={(e) => handleDownload(doc._id, doc.name, e)} title="Download">
+                            <Download className="h-4 w-4" />
+                            <span className="text-xs font-medium">Download</span>
+                          </Button>
+                          <Button variant="danger" className="h-8 px-3 flex items-center gap-1.5" onClick={(e) => handleDelete(doc._id, e)} title="Delete">
+                            <Trash2 className="h-4 w-4" />
+                            <span className="text-xs font-medium">Delete</span>
+                          </Button>
                         </div>
                       </td>
                     </tr>

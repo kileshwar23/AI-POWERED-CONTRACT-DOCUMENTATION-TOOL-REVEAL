@@ -1,6 +1,9 @@
 const Document = require('../models/Document');
-
-// Helpers — simulated AI analysis (replace with real LLM calls when ready)
+const fs = require('fs');
+const path = require('path');
+const pdfParse = require('pdf-parse');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+// Helpers — simulated AI analysis
 const simulateRiskScore = () => Math.floor(Math.random() * 100);
 
 const SAMPLE_CLAUSES = [
@@ -18,14 +21,156 @@ const RISK_PATTERNS = [
   { type: 'LOW', description: 'Vague termination notice period — consider specifying exact days.' },
 ];
 
-// 1. POST /analyze/:id — marks doc as ANALYZED, saves clauses & risk score
 const analyzeContract = async (req, res) => {
   try {
-    const document = await Document.findOne({ _id: req.params.id, uploaderId: req.user._id });
-    if (!document) return res.status(404).json({ message: 'Document not found' });
+    let document;
+    const adminRoles = ['ADMIN', 'OWNER', 'ORG_ADMIN', 'SYSTEM_ADMIN'];
+    if (adminRoles.includes(req.user.role)) {
+      document = await Document.findById(req.params.id);
+    } else {
+      document = await Document.findOne({ _id: req.params.id, uploaderId: req.user._id });
+    }
+    if (!document) return res.status(404).json({ message: 'Document not found or access denied' });
 
-    const riskScore = simulateRiskScore();
-    const extractedClauses = SAMPLE_CLAUSES.slice(0, 4);
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ message: 'GEMINI_API_KEY is not set in the backend environment variables.' });
+    }
+
+    // Strip leading slash so path.join works correctly on Windows
+    const relativeUrl = document.fileUrl.replace(/^\//, '');
+    const filePath = path.join(__dirname, '../../', relativeUrl);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: `Physical file not found: ${filePath}` });
+    }
+    const fileBuffer = fs.readFileSync(filePath);
+
+    // Extract plain text from the file (avoids multimodal/vision requirements)
+    let contractText = '';
+    const ext = path.extname(document.fileUrl).toLowerCase();
+    if (ext === '.pdf') {
+      const pdfData = await pdfParse(fileBuffer);
+      contractText = pdfData.text;
+    } else {
+      // For .txt, .doc, .docx — use raw buffer text as best effort
+      contractText = fileBuffer.toString('utf8');
+    }
+
+    // Limit to first 3000 chars to stay within free-tier token limits
+    const contractSnippet = contractText.slice(0, 3000);
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+    // Compact prompt — minimizes output tokens
+    const prompt = `Analyze this contract excerpt and return ONLY valid JSON (no markdown):
+{"riskScore":70,"extractedClauses":[{"title":"Clause","content":"summary","type":"RISK"}]}
+Rules: riskScore 0-100, type=RISK or INFO, max 5 clauses, content under 120 chars.
+
+CONTRACT:
+${contractSnippet}`;
+
+    // Try text-only models in order (no vision/multimodal needed)
+    // gemini-3.5-flash confirmed working with this API key
+    const MODELS = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+    let result = null;
+    let lastError = null;
+
+    for (const modelName of MODELS) {
+      try {
+        console.log(`Trying model: ${modelName}`);
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          // No responseMimeType — not supported by all models, causes JSON issues
+          generationConfig: { maxOutputTokens: 600 }
+        });
+        // Send as plain text — no file upload needed
+        result = await model.generateContent(prompt);
+        console.log(`✅ Success with model: ${modelName}`);
+        console.log(`Raw response: ${result.response.text().slice(0, 300)}`);
+        break;
+      } catch (err) {
+        console.warn(`⚠️ ${modelName} failed: ${err.message.slice(0, 120)}`);
+        lastError = err;
+      }
+    }
+
+    if (!result) throw lastError;
+
+    let parsedData;
+    try {
+      const rawText = result.response.text();
+      // Robust extraction: find first JSON object in response (handles markdown fences, extra text)
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No JSON found in response');
+      parsedData = JSON.parse(jsonMatch[0]);
+      console.log(`Parsed riskScore: ${parsedData.riskScore}, clauses: ${parsedData.extractedClauses?.length}`);
+    } catch (parseErr) {
+      console.warn('JSON parse failed, using defaults:', parseErr.message);
+      parsedData = { riskScore: 50, extractedClauses: [] };
+    }
+
+    const riskScore = typeof parsedData.riskScore === 'number' ? parsedData.riskScore : 50;
+    let extractedClauses = [];
+
+    const rawClauses = parsedData.extractedClauses;
+    if (Array.isArray(rawClauses)) {
+      rawClauses.forEach(item => {
+        if (typeof item === 'string') {
+          const trimmed = item.trim();
+          if (trimmed.startsWith('[')) {
+            try {
+              // Convert JavaScript literal formatting to valid JSON
+              const cleanedStr = trimmed
+                .replace(/'/g, '"')
+                .replace(/(\w+)\s*:/g, '"$1":');
+              const arr = JSON.parse(cleanedStr);
+              if (Array.isArray(arr)) {
+                arr.forEach(subItem => {
+                  extractedClauses.push({
+                    title: subItem.title || 'Clause',
+                    content: subItem.content || '',
+                    type: subItem.type || 'INFO',
+                    riskScore: subItem.riskScore || 0,
+                    suggestedRedline: subItem.suggestedRedline || ''
+                  });
+                });
+                return;
+              }
+            } catch (err) {
+              console.warn('Failed to parse sub-array string:', err.message);
+            }
+          }
+          extractedClauses.push({ title: 'Clause', content: item, type: 'INFO' });
+        } else if (item && typeof item === 'object') {
+          extractedClauses.push({
+            title: item.title || 'Clause',
+            content: item.content || '',
+            type: item.type || 'INFO',
+            riskScore: item.riskScore || 0,
+            suggestedRedline: item.suggestedRedline || ''
+          });
+        }
+      });
+    } else if (typeof rawClauses === 'string') {
+      try {
+        const cleanedStr = rawClauses.trim()
+          .replace(/'/g, '"')
+          .replace(/(\w+)\s*:/g, '"$1":');
+        const arr = JSON.parse(cleanedStr);
+        if (Array.isArray(arr)) {
+          arr.forEach(item => {
+            extractedClauses.push({
+              title: item.title || 'Clause',
+              content: item.content || '',
+              type: item.type || 'INFO',
+              riskScore: item.riskScore || 0,
+              suggestedRedline: item.suggestedRedline || ''
+            });
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to parse stringified rawClauses:', err.message);
+      }
+    }
 
     const updated = await Document.findByIdAndUpdate(
       req.params.id,
@@ -33,9 +178,10 @@ const analyzeContract = async (req, res) => {
       { new: true }
     );
 
-    res.json({ message: 'Contract analyzed successfully', data: updated });
+    res.json({ message: 'Contract analyzed successfully by Gemini', data: updated });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Gemini Analysis Error:', error);
+    res.status(500).json({ message: 'Failed to analyze document with AI: ' + error.message });
   }
 };
 

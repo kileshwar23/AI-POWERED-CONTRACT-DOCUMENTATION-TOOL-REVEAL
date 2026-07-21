@@ -1,31 +1,52 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { UploadCloud, FileText, AlertTriangle, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { UploadCloud, FileText, AlertTriangle, CheckCircle, Clock, Loader2, Archive, XCircle } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { documentService } from '../services/documentService';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export const Dashboard = () => {
+  const { user } = useAuth();
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [stats, setStats] = useState({ analyzed: 0, risksIdentified: 0, timeSaved: 0 });
+  const [recentDocs, setRecentDocs] = useState([]);
+  const [loadingDocs, setLoadingDocs] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchData = async () => {
       try {
-        const data = await documentService.getDocumentStatistics();
+        const statsData = await documentService.getDocumentStatistics();
         setStats({
-          analyzed: data.analyzed || 0,
-          risksIdentified: data.risksIdentified || 0,
-          timeSaved: data.timeSaved || 0
+          analyzed: statsData.analyzed || 0,
+          risksIdentified: statsData.risksIdentified || 0,
+          timeSaved: statsData.timeSaved || 0
         });
       } catch (error) {
         console.error("Failed to fetch stats", error);
       }
+      
+      try {
+        const adminRoles = ['ADMIN', 'OWNER', 'ORG_ADMIN', 'SYSTEM_ADMIN'];
+        let docs = [];
+        if (user?.role && adminRoles.includes(user.role)) {
+          const res = await documentService.getAllAdminDocuments();
+          docs = res?.documents || [];
+        } else {
+          docs = await documentService.getAllDocuments() || [];
+        }
+        // Assuming docs are sorted by newest first, otherwise we would sort them by createdAt
+        setRecentDocs(docs.slice(0, 3));
+      } catch (error) {
+        console.error("Failed to fetch recent documents", error);
+      } finally {
+        setLoadingDocs(false);
+      }
     };
-    fetchStats();
-  }, []);
+    fetchData();
+  }, [user?.role]);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -88,27 +109,39 @@ export const Dashboard = () => {
               Recent Analysis
             </h3>
             <div className="space-y-4 animate-fade-in-delayed">
-              {[
-                { name: 'Service Level Agreement - Acme Corp.pdf', status: 'High Risk', icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-400/10 border-red-400/30' },
-                { name: 'Non-Disclosure Agreement_v2.docx', status: 'Clean', icon: CheckCircle, color: 'text-emerald-400', bg: 'bg-emerald-400/10 border-emerald-400/30' },
-                { name: 'Vendor Contract 2026.pdf', status: 'Pending Review', icon: Clock, color: 'text-amber-400', bg: 'bg-amber-400/10 border-amber-400/30' }
-              ].map((doc, i) => (
-                <Card key={i} className="flex items-center justify-between p-4 hover:border-[#8b5cf6]/50 hover:shadow-lg transition-all cursor-pointer group">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-[#27272a] rounded-lg group-hover:bg-[#8b5cf6]/20 transition-colors">
-                      <FileText className="h-6 w-6 text-[#a1a1aa] group-hover:text-[#8b5cf6]" />
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-lg text-white group-hover:text-[#8b5cf6] transition-colors">{doc.name}</h4>
-                      <p className="text-sm text-[#a1a1aa]">Analyzed 2 hours ago</p>
-                    </div>
-                  </div>
-                  <div className={`px-3 py-1 rounded-full flex items-center gap-2 text-sm font-medium border ${doc.color} ${doc.bg}`}>
-                    <doc.icon className="h-4 w-4" />
-                    {doc.status}
-                  </div>
-                </Card>
-              ))}
+              {loadingDocs ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#8b5cf6]" />
+                </div>
+              ) : recentDocs.length === 0 ? (
+                <div className="text-center py-8 text-[#a1a1aa]">No documents analyzed yet.</div>
+              ) : (
+                recentDocs.map((doc) => {
+                  let statusUI = { icon: Clock, label: 'Pending', color: 'text-amber-400', bg: 'bg-amber-400/10 border-amber-400/30' };
+                  if (doc.status === 'APPROVED') statusUI = { icon: CheckCircle, label: 'Approved', color: 'text-green-500', bg: 'bg-green-500/10 border-green-500/30' };
+                  else if (doc.status === 'REJECTED') statusUI = { icon: XCircle, label: 'Rejected', color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/30' };
+                  else if (doc.status === 'ANALYZED') statusUI = { icon: CheckCircle, label: 'Analyzed', color: 'text-emerald-400', bg: 'bg-emerald-400/10 border-emerald-400/30' };
+                  else if (doc.status === 'ARCHIVED') statusUI = { icon: Archive, label: 'Archived', color: 'text-gray-400', bg: 'bg-gray-400/10 border-gray-400/30' };
+                  
+                  return (
+                    <Card key={doc._id} className="flex items-center justify-between p-4 hover:border-[#8b5cf6]/50 hover:shadow-lg transition-all cursor-pointer group" onClick={() => navigate('/documents')}>
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-[#27272a] rounded-lg group-hover:bg-[#8b5cf6]/20 transition-colors">
+                          <FileText className="h-6 w-6 text-[#a1a1aa] group-hover:text-[#8b5cf6]" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-lg text-white group-hover:text-[#8b5cf6] transition-colors">{doc.name}</h4>
+                          <p className="text-sm text-[#a1a1aa]">{new Date(doc.createdAt).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      <div className={`px-3 py-1 rounded-full flex items-center gap-2 text-sm font-medium border ${statusUI.color} ${statusUI.bg}`}>
+                        <statusUI.icon className="h-4 w-4" />
+                        {statusUI.label}
+                      </div>
+                    </Card>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -135,7 +168,7 @@ export const Dashboard = () => {
             <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-[#8b5cf6]/30 rounded-full blur-2xl"></div>
             <h3 className="text-xl font-semibold mb-2 text-white relative z-10">Upgrade to Pro</h3>
             <p className="text-[#a1a1aa] mb-6 relative z-10">Get unlimited document analysis and priority AI support.</p>
-            <Button variant="primary" className="w-full relative z-10">View Plans</Button>
+            <Button variant="primary" className="w-full relative z-10" onClick={() => navigate('/settings', { state: { activeTab: 'billing' } })}>View Plans</Button>
           </Card>
         </div>
       </div>

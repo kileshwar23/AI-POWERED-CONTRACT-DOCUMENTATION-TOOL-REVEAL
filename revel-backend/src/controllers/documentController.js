@@ -248,9 +248,47 @@ const getDocumentStatistics = async (req, res) => {
   }
 };
 
+// 11. Approve Document
+const approveDocument = async (req, res) => {
+  try {
+    const adminRoles = ['ADMIN', 'OWNER', 'ORG_ADMIN', 'SYSTEM_ADMIN'];
+    if (!adminRoles.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Only admins can approve documents' });
+    }
+    const document = await Document.findByIdAndUpdate(
+      req.params.id,
+      { status: 'APPROVED' },
+      { new: true }
+    );
+    if (!document) return res.status(404).json({ message: 'Document not found' });
+    res.json(document);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// 12. Reject Document
+const rejectDocument = async (req, res) => {
+  try {
+    const adminRoles = ['ADMIN', 'OWNER', 'ORG_ADMIN', 'SYSTEM_ADMIN'];
+    if (!adminRoles.includes(req.user.role)) {
+      return res.status(403).json({ message: 'Only admins can reject documents' });
+    }
+    const document = await Document.findByIdAndUpdate(
+      req.params.id,
+      { status: 'REJECTED' },
+      { new: true }
+    );
+    if (!document) return res.status(404).json({ message: 'Document not found' });
+    res.json(document);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   uploadDocument, uploadNewVersion, getDocumentVersions, compareDocuments,
   getDocument, getAllDocuments, deleteDocument,
   renameDocument, downloadDocument, favoriteDocument, archiveDocument,
-  restoreDocument, getDocumentStatistics,
+  restoreDocument, getDocumentStatistics, approveDocument, rejectDocument
 };
